@@ -49,7 +49,7 @@ if st.button("Generate Summary"):
         with st.spinner("Gemini is preparing your summary..."):
             try:
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.8-flash",
                     contents=(
                         "Create clear, concise exam revision notes "
                         "using headings and bullet points. "
@@ -88,7 +88,7 @@ if st.button("Generate MCQ Quiz"):
         with st.spinner("Gemini is creating your quiz..."):
             try:
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.8-flash",
                     contents=(
                         "Create exactly 5 MCQs from the study material below. "
                         "Use this exact format for every question:\n"
