@@ -1,6 +1,8 @@
+import hashlib
 import streamlit as st
 import re
 from io import BytesIO
+from pypdf import PdfReader
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from google import genai
@@ -27,6 +29,42 @@ except Exception:
     st.error(
         "Gemini API key missing. Check your Streamlit Cloud Secrets."
     )
+    st.divider()
+st.subheader("📂 Upload Study Material PDF")
+
+st.session_state.setdefault("study_material", "")
+st.session_state.setdefault("quiz_history", [])
+
+uploaded_pdf = st.file_uploader(
+    "Choose a PDF file",
+    type=["pdf"]
+)
+
+if uploaded_pdf is not None:
+    pdf_bytes = uploaded_pdf.getvalue()
+    pdf_hash = hashlib.sha256(pdf_bytes).hexdigest()
+
+    if pdf_hash != st.session_state.get("uploaded_pdf_hash"):
+        try:
+            reader = PdfReader(BytesIO(pdf_bytes))
+            pdf_text = "\n".join(
+                page.extract_text() or ""
+                for page in reader.pages
+            )
+            st.session_state["uploaded_pdf_hash"] = pdf_hash
+
+            if pdf_text.strip():
+                st.session_state["study_material"] = pdf_text
+                st.success("PDF text extracted into the study material box.")
+            else:
+                st.warning(
+                    "PDF me readable text nahi mila. "
+                    "Ho sakta hai PDF scanned images se bani ho."
+                )
+        except Exception as e:
+            st.session_state["uploaded_pdf_hash"] = pdf_hash
+            st.error("PDF read nahi ho payi.")
+            st.caption(str(e))
 
 st.text_area(
     "Paste your study material here",
@@ -58,16 +96,17 @@ if st.button("Generate Summary"):
                     )
                 )
                 summary = response.text
-
-                if not summary:
+                if not summary or not summary.strip():
                     raise ValueError("Gemini returned an empty summary.")
 
                 st.session_state["summary_result"] = summary
-                st.markdown(summary)
 
             except Exception as e:
                 st.error("AI Summary generate nahi ho payi.")
                 st.caption(str(e))
+
+if st.session_state.get("summary_result"):
+    st.markdown(st.session_state["summary_result"])
 
 st.divider()
 st.subheader("🎯 AI MCQ Quiz")
@@ -174,6 +213,10 @@ if st.session_state.get("quiz_result"):
                 if selected[i] == question["answer"]
             )
             st.session_state["quiz_score"] = score
+            st.session_state["quiz_history"].append({
+                "score": score,
+                "total": len(questions)
+            })
             st.session_state["quiz_submitted"] = True
 
         if st.session_state.get("quiz_submitted", False):
@@ -186,8 +229,48 @@ if st.session_state.get("quiz_result"):
                 )
                 if question["explanation"]:
                     st.caption(question["explanation"])
+                    # Student Progress Dashboard
+st.divider()
+st.header("📊 Student Progress Dashboard")
 
+history = st.session_state.get("quiz_history", [])
 
+if history:
+    total_quizzes = len(history)
+    average_score = sum(
+        item["score"] / item["total"] * 100
+        for item in history
+        if item["total"] > 0
+    ) / total_quizzes
+
+    best_score = max(
+        item["score"] / item["total"] * 100
+        for item in history
+        if item["total"] > 0
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric("Quizzes Attempted", total_quizzes)
+    col2.metric("Average Score", f"{average_score:.1f}%")
+    col3.metric("Best Score", f"{best_score:.1f}%")
+
+    st.subheader("📈 Quiz Score History")
+    chart_data = [
+        {
+            "Quiz": f"Quiz {i + 1}",
+            "Score (%)": round(item["score"] / item["total"] * 100, 1)
+        }
+        for i, item in enumerate(history)
+        if item["total"] > 0
+    ]
+
+    if chart_data:
+        st.line_chart(
+            {item["Quiz"]: item["Score (%)"] for item in chart_data}
+        )
+else:
+    st.info("Abhi quiz history nahi hai. Pehla quiz complete karo!")
 def create_revision_pdf(notes):
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)

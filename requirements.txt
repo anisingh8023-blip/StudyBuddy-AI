@@ -1,6 +1,4 @@
 streamlit==1.65.0
-ollama==0.6.3
+google-genai==2.31.0
+pypdf==6.21.0
 reportlab==5.0.1
-streamlit
-google-genai
-reportlab
